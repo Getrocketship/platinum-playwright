@@ -1,0 +1,96 @@
+name: E2E Tests
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # every hour (UTC)
+  workflow_dispatch:       # manual run
+  push:
+    branches: [ main ]     # optional: also run on pushes to main
+
+permissions:
+  contents: read
+  pages: write            # deploy Playwright report to GitHub Pages
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# .github/workflows/e2e.yml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      pw_outcome: ${{ steps.pw.outcome }} # expose step outcome to other jobs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-fund --no-audit; fi
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install chromium
+      - name: Run Playwright tests
+        id: pw
+        run: npx playwright test
+        continue-on-error: true   # <-- do not fail the job; let downstream steps run
+      - name: Upload HTML report as artifact
+        if: always()
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: playwright-report
+
+  deploy:
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  email:
+    needs: [test, deploy]
+    # 🔑 send email if the Playwright step was not "success"
+    if: needs.test.outputs.pw_outcome != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure email via Mailgun
+        if: needs.test.outputs.pw_outcome != 'success'
+        env:
+            MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+            MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+            MAILGUN_TO: ${{ secrets.MAILGUN_TO }}
+            MAILGUN_FROM: ${{ secrets.MAILGUN_FROM }}
+            REPORT_URL: ${{ needs.deploy.outputs.page_url }}
+            MAILGUN_API_BASE: ${{ vars.MAILGUN_API_BASE }} # optional; set to https://api.eu.mailgun.net if you're on EU region
+        run: |
+            set -euo pipefail
+
+            API_BASE="${MAILGUN_API_BASE:-https://api.mailgun.net}"
+            ENDPOINT="${API_BASE}/v3/${MAILGUN_DOMAIN}/messages"
+
+            SUBJECT="❌ Playwright failed for Platinum Edge"
+            TEXT="One or more tests failed for platinumedge.com. Report: ${REPORT_URL}"
+            HTML="<p>One or more tests failed for platinumedge.com.</p><p><a href='${REPORT_URL}'>Open Playwright report</a></p>"
+
+            # --fail-with-body makes curl exit nonzero on 4xx/5xx and prints server error body
+            curl --fail-with-body -sS -v \
+            -u "api:${MAILGUN_API_KEY}" \
+            --form-string from="${MAILGUN_FROM:-Playwright <postmaster@${MAILGUN_DOMAIN}>}" \
+            --form-string to="${MAILGUN_TO}" \
+            --form-string subject="${SUBJECT}" \
+            --form-string text="${TEXT}" \
+            --form-string html="${HTML}" \
+            "${ENDPOINT}"
+
+
+
+
