@@ -1,9 +1,6 @@
 // @ts-check
 import { test, expect } from '@playwright/test';
 
-const VISUAL_DIFF = parseFloat('0.199'); //20%
-
-
 
 // Small helper to attach a full-page screenshot to the report
 async function shot(page, name) {
@@ -27,20 +24,12 @@ async function closeConsentIfAny(page) {
 }
 
 
-const VISUAL_OPTS_ATF = {
-  animations: 'disabled',
-  caret: 'hide',
-  scale: 'css',
-  maxDiffPixelRatio: VISUAL_DIFF,
-};
-
 async function atfScreenshot(page, browserName, slug) {
   // stabilize the viewport area (“above the fold”)
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForLoadState('networkidle').catch(() => {});
   await page.evaluate(async () => { try { await document.fonts?.ready; } catch {} });
-
-  await expect(page).toHaveScreenshot(`${slug}-atf-${browserName}.png`, VISUAL_OPTS_ATF);
+  await expect(page).toHaveScreenshot(`${slug}-atf.png`);
 }
 
 async function runPageCheck(page, browserName, { url, titleRe, slug }) {

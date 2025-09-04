@@ -12,6 +12,18 @@ export default defineConfig({
     video: 'retain-on-failure',
     trace: 'on-first-retry',
   },
+  expect: {
+    timeout: 10000,
+    // 👇 This controls BOTH toMatchSnapshot & toHaveScreenshot filenames.
+    // Removes OS / project suffixes entirely.
+    snapshotPathTemplate: '{testDir}/{testFileName}-snapshots/{arg}{ext}',
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+      maxDiffPixelRatio: 0.199
+    }
+  },
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],

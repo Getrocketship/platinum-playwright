@@ -19,7 +19,7 @@ concurrency:
 # .github/workflows/e2e.yml
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     outputs:
       pw_outcome: ${{ steps.pw.outcome }} # expose step outcome to other jobs
     steps:
