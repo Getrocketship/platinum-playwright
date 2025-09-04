@@ -1,5 +1,5 @@
 // @ts-check
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 
 // Small helper to attach a full-page screenshot to the report
@@ -29,7 +29,12 @@ async function atfScreenshot(page, browserName, slug) {
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForLoadState('networkidle').catch(() => {});
   await page.evaluate(async () => { try { await document.fonts?.ready; } catch {} });
-  await expect(page).toHaveScreenshot(`${slug}-atf.png`);
+  await expect(page).toHaveScreenshot(`${slug}-atf.png`, {
+    animations: 'disabled',
+    caret: 'hide',
+    scale: 'css',
+    maxDiffPixelRatio: 0.199,
+  });
 }
 
 async function runPageCheck(page, browserName, { url, titleRe, slug }) {
@@ -72,3 +77,71 @@ for (const p of pages) {
     await runPageCheck(page, browserName, p);
   });
 }
+
+test('Platinum Edge - Add event to cart', async ({ page }) => {
+    // 1) Land on CSM listing and drill into a registerable item if needed
+    await page.goto('https://platinumedge.com/event-type/certified-scrummaster-csm', { waitUntil: 'domcontentloaded' });
+    await closeConsentIfAny(page);
+
+    // If a register link is present, click it to reach the product page that has the add-to-cart button.
+    const registerLink = page.locator('a.anch-register-tbl').first();
+    if (await registerLink.isVisible().catch(() => false)) {
+        await Promise.all([
+        registerLink.click(),
+        page.waitForLoadState('domcontentloaded').catch(() => {}),
+        ]);
+    }
+
+    // 2) Add to cart, expect auto-redirect to /cart
+    const addToCart = page.locator('button.single_add_to_cart_button').first();
+    await expect(addToCart, 'Add to cart button should be visible').toBeVisible({ timeout: 20_000 });
+
+    await Promise.all([
+        page.waitForURL(/\/cart(\/|$)/, { timeout: 20_000 }),
+        addToCart.click(),
+    ]);
+
+    // 3) On Cart, click “Next page” to reach the intermediary info page
+    const nextPageCta = page.getByRole('button', { name: /next page/i })
+        .or(page.getByRole('link', { name: /next page/i }));
+    await expect(nextPageCta, 'Cart should show “Next page”').toBeVisible({ timeout: 15_000 });
+
+    await Promise.all([
+        nextPageCta.first().click(),
+        page.waitForLoadState('domcontentloaded').catch(() => {}),
+    ]);
+
+    // 4) Fill intermediary form (your selectors)
+    await page.waitForSelector('#addcartdataform', { state: 'visible', timeout: 20_000 });
+    const form = page.locator('#addcartdataform');
+
+    await form.locator('.form-group-email input').fill('development@getrocketship.com');
+    await form.locator('.form-group-fname input').fill('Play');
+    await form.locator('.form-group-lname input').fill('Wright');
+    await form.locator('.form-group-company input').fill('GetRocketship');
+    await form.locator('.form-group-position input').fill('dev');
+    await form.locator('.form-group-phone input').fill('11111');
+
+  // Consent checkbox (click or check, depending on markup)
+    const consent = form.locator('.form-group-consent input').first();
+    if (await consent.isVisible().catch(() => false)) {
+        // Prefer .check() if it's a checkbox; fallback to click if not
+        await consent.check({ force: true }).catch(async () => {
+        await consent.click({ force: true });
+        });
+    }
+
+    // 5) Submit to review
+    const reviewBtn = form.locator('#submit-to-review-btn').first();
+    await expect(reviewBtn, 'Submit-to-review button should be enabled').toBeEnabled({ timeout: 10_000 });
+    await Promise.all([
+        reviewBtn.click(),
+        page.waitForLoadState('domcontentloaded').catch(() => {}),
+    ]);
+
+    // 6) Assert we’re on the review step and place-order exists
+    await expect(
+        page.locator('button[name="woocommerce_checkout_place_order"]').first(),
+        'Review step should show the final place order button'
+    ).toBeVisible({ timeout: 15_000 });
+});

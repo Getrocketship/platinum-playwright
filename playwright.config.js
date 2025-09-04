@@ -1,21 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const VIEWPORT = { width: 1280, height: 900 };
-
 export default defineConfig({
   testDir: './tests',
   retries: 1,
-  use: {
-    headless: true,
-    baseURL: 'https://platinumedge.com',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    trace: 'on-first-retry',
-  },
+    use: {
+        headless: true,
+        baseURL: 'https://platinumedge.com',
+        screenshot: 'off',            // <-- we'll attach our own full-page on failure
+        video: 'on',
+        trace: 'on-first-retry',
+        viewport: { width: 1440, height: 900 },
+        timezoneId: 'UTC',
+        locale: 'en-US',
+        colorScheme: 'light',
+    },
   expect: {
     timeout: 10000,
-    // 👇 This controls BOTH toMatchSnapshot & toHaveScreenshot filenames.
-    // Removes OS / project suffixes entirely.
     snapshotPathTemplate: '{testDir}/{testFileName}-snapshots/{arg}{ext}',
     toHaveScreenshot: {
       animations: 'disabled',
@@ -30,6 +30,6 @@ export default defineConfig({
     ['./reporters/mailgun-reporter.ts'], // optional if you want the immediate email too
   ],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: VIEWPORT } },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
 });
